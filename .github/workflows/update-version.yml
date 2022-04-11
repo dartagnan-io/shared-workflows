@@ -1,0 +1,68 @@
+name: Update Version
+
+on:
+  workflow_call:
+    inputs:
+      zone:
+        required: true
+        type: string
+      service_name:
+        required: true
+        type: string
+    secrets:
+      REPO:
+        required: true
+      REPO_TOKEN:
+        required: true
+
+jobs:
+  update_version:
+    name: Update version on ${{ inputs.zone }}
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Extract branch name
+        id: extract_branch
+        run: |
+          branch=$(echo "${{ github.ref }}" | sed "s|refs/heads/||g")
+
+          case $branch in
+            develop)
+              repoRef="staging"
+              ;;
+            integration)
+              repoRef="integration"
+              ;;
+            main)
+              repoRef="preproduction"
+              ;;
+            *)
+              echo "Unsupported branch name $branch" >&2
+              exit 1
+              ;;
+          esac
+
+          echo ::set-output name=repo_ref::${{ inputs.zone }}/$repoRef
+
+      - name: Sanitize Tag
+        id: sanitize_tag
+        run: echo ::set-output name=tag::$(echo "${{ github.ref }}-${{ github.sha }}" | sed "s|refs/heads/||g" | sed "s|/|-|g")
+
+      - name: Checkout tools repo
+        uses: actions/checkout@v2
+        with:
+          repository: ${{ secrets.REPO }}
+          ref: ${{ steps.extract_branch.outputs.repo_ref }}
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Dump version
+        uses: mikefarah/yq@v4.6.0
+        with:
+          cmd: yq e '.versions.${{ inputs.service_name }} = "${{ steps.sanitize_tag.outputs.tag }}"' -i versions.yaml
+
+      - name: Push change
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add .
+          git commit -m "[Github Action] Bump ${{ inputs.service_name }} to ${{ steps.sanitize_tag.outputs.tag }}"
+          git push
