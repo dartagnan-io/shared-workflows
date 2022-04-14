@@ -9,6 +9,9 @@ on:
       service_name:
         required: true
         type: string
+      tag:
+        required: false
+        type: string
     secrets:
       REPO:
         required: true
@@ -44,6 +47,7 @@ jobs:
           echo ::set-output name=repo_ref::${{ inputs.zone }}/$repoRef
 
       - name: Sanitize Tag
+        if: inputs.tag == null
         id: sanitize_tag
         run: echo ::set-output name=tag::$(echo "${{ github.ref }}-${{ github.sha }}" | sed "s|refs/heads/||g" | sed "s|/|-|g")
 
@@ -57,12 +61,12 @@ jobs:
       - name: Dump version
         uses: mikefarah/yq@v4.6.0
         with:
-          cmd: yq e '.versions.${{ inputs.service_name }} = "${{ steps.sanitize_tag.outputs.tag }}"' -i versions.yaml
+          cmd: yq e '.versions.${{ inputs.service_name }} = "${{ inputs.tag || steps.sanitize_tag.outputs.tag }}"' -i versions.yaml
 
       - name: Push change
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add .
-          git commit -m "[Github Action] Bump ${{ inputs.service_name }} to ${{ steps.sanitize_tag.outputs.tag }}"
+          git commit -m "[Github Action] Bump ${{ inputs.service_name }} to ${{ inputs.tag || steps.sanitize_tag.outputs.tag }}"
           git push
