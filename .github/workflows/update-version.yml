@@ -35,6 +35,9 @@ jobs:
             integration)
               repoRef="integration"
               ;;
+            demo)
+              repoRef="demo"
+              ;;
             main)
               repoRef="preproduction"
               ;;
